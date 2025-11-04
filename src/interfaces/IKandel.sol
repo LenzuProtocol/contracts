@@ -25,4 +25,18 @@ interface IKandel {
      * @return vault The vault address
      */
     function vault() external view returns (address vault);
+
+    /**
+     * @notice Gets current APY for this Kandel strategy
+     * @return apy Annual Percentage Yield in basis points (e.g., 1200 = 12%)
+     */
+    function getAPY() external view returns (uint256 apy);
+
+    /**
+     * @notice Gets current performance metrics
+     * @return active Whether strategy is active
+     * @return currentYield Current yield percentage (basis points)
+     * @return totalValue Estimated total value in strategy
+     */
+    function getPerformance() external view returns (bool active, uint256 currentYield, uint256 totalValue);
 }

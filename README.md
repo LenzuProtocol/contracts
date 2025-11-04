@@ -1,40 +1,52 @@
-# Autonomous Liquidity Manager - Somnia Testnet
+# Lenzu Protocol - Smart Contracts
 
-An AI-powered autonomous liquidity management system for DeFi strategies across Elix (Mangrove) and Tokos lending protocols on Somnia testnet.
+An AI-powered autonomous liquidity management system built on Somnia blockchain, featuring testnet faucets, lending protocols, and agent management contracts. The system enables autonomous DeFi strategies across multiple protocols with real-time decision making.
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   AI Agent Backend                      │
-│                (Strategy Decision)                      │
+│                   AI Agent Service                      │
+│           (Multi-User Management & AI)                  │
+│              ┌─────────────────────────┐                │
+│              │     Price Oracle        │                │
+│              │    (CoinGecko API)      │                │
+│              └─────────────────────────┘                │
 └────────────────┬────────────────────────────────────────┘
+                 │ Web3 Calls
+                 ▼
+┌──────────────────────────────────────────────────────────┐
+│              Smart Contract Layer                        │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────┐ │
+│  │  Agent Manager  │ │ Tokos  &  Elix  │ │ Mock Tokens │ │
+│  │   (ALM Core)    │ │   (Yield Gen)   │ │  (Testnet)  │ │
+│  └─────────────────┘ └─────────────────┘ └─────────────┘ │
+└──────────────────────────────────────────────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────────────────────────────┐
-│           AutonomousLiquidityManager.sol                │
-│              (On-chain Executor)                        │
-│                                                         │
-│  ┌─────────────────────┐  ┌─────────────────────────┐   │
-│  │    Elix Strategy    │  │     Tokos Strategy      │   │
-│  │   (Kandel MM)       │  │   (Lending Yield)       │   │
-│  └─────────────────────┘  └─────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│                Mock Tokens (Testnet)                    │
-│           mWETH          │          mUSDC               │
+│               Somnia Blockchain                         │
+│        mWETH (10 ETH)    │    mUSDC (10,000)            │
+│        Faucet Claims     │    Faucet Claims             │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## 📦 Contracts Overview
 
-- **AutonomousLiquidityManager.sol** - Main vault and strategy executor
-- **TokosLending.sol** - Lending protocol with yield generation
-- **MockWETH.sol / MockUSDC.sol** - Testnet tokens with faucet functionality
-- **Interfaces** - Clean abstractions for Elix and Tokos protocols
-- **Libraries** - Somnia protocol address registry
+### Core Contracts
+- **AgentManager.sol** - Main autonomous liquidity management contract
+- **TokosLending.sol** - Lending protocol with dynamic APY and yield generation
+- **MockWETH.sol** - Testnet WETH with faucet functionality (10 ETH per claim)
+- **MockUSDC.sol** - Testnet USDC with faucet functionality (10,000 USDC per claim)
+
+### Interface Layer
+- **IKandel.sol / IKandelSeeder.sol** - Elix protocol integrations
+- **ITokosLending.sol** - Lending protocol interface
+- **IVault.sol / IVaultFactory.sol** - Vault management interfaces
+
+### Libraries
+- **SomniaAddresses.sol** - Protocol address registry for production
+- **MockSomniaAddresses.sol** - Testnet address registry
 
 ## 🚀 Quick Start
 
@@ -45,8 +57,8 @@ An AI-powered autonomous liquidity management system for DeFi strategies across 
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 
-# Install OpenZeppelin contracts
-forge install OpenZeppelin/openzeppelin-contracts
+# Install project dependencies
+forge install
 ```
 
 ### 2. Environment Setup
@@ -57,7 +69,7 @@ cp .env.example .env
 
 # Edit .env with your configuration
 PRIVATE_KEY=your_private_key_here
-SOMNIA_RPC_URL=https://dream-rpc.somnia.network
+SOMNIA_RPC_URL=https://testnet.somnia.network
 CHAIN_ID=50312
 ```
 
@@ -67,107 +79,130 @@ Get STT (native token) from [Somnia Faucet](https://faucet.somnia.network) for g
 
 ## 🔧 Deployment
 
-### Option 1: Deploy All (Recommended)
+### Quick Deploy All Contracts
 
 ```bash
-# Deploy mock tokens
-./deploy-tokens.sh
-
-# Update .env with token addresses (printed by script)
-# Then deploy Tokos
-./deploy-tokos.sh
-
-# Finally deploy ALM
-./deploy-alm.sh
+# Deploy everything with one command
+./scripts/deploy_fixed.sh
 ```
 
-### Option 2: Deploy Individually
+This will deploy in the correct order:
+1. Mock tokens (WETH, USDC)
+2. Tokos lending protocol  
+3. Agent manager contract
+4. Save all addresses to `deployments/addresses.txt`
+
+### Manual Deployment Steps
 
 ```bash
 # 1. Deploy Mock Tokens
-./deploy-tokens.sh
+forge create src/mocks/MockWETH.sol:MockWETH \
+  --constructor-args $DEPLOYER_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL \
+  --private-key $PRIVATE_KEY
 
-# 2. Update .env with token addresses:
-# WETH_ADDRESS=0x...
-# USDC_ADDRESS=0x...
+forge create src/mocks/MockUSDC.sol:MockUSDC \
+  --constructor-args $DEPLOYER_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL \
+  --private-key $PRIVATE_KEY
 
-# 3. Deploy Tokos Lending
-./deploy-tokos.sh
+# 2. Deploy Tokos Lending
+forge create src/tokos/TokosLending.sol:TokosLending \
+  --rpc-url $SOMNIA_RPC_URL \
+  --private-key $PRIVATE_KEY
 
-# 4. Update SomniaAddresses.sol with Tokos address
-
-# 5. Deploy Autonomous Liquidity Manager
-./deploy-alm.sh
+# 3. Deploy Agent Manager
+forge create src/AgentManager.sol:AgentManager \
+  --constructor-args $OWNER_ADDRESS $TOKOS_ADDRESS $WETH_ADDRESS $USDC_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL \
+  --private-key $PRIVATE_KEY
 ```
 
-## 📋 Contract Addresses (Example)
-
-After deployment, your contracts will be at addresses like:
+## 📋 Deployed Contract Addresses (Somnia Testnet)
 
 ```bash
-# Mock Tokens
-WETH_ADDRESS=0xee8A21AA092902A595f591e6a4d2ABAAa0B49BF2
-USDC_ADDRESS=0x164B4eF50c0C8C75Dc6F571e62731C4Fa0C6283A
+# Core Contracts
+AGENT_MANAGER=0x63FAb7efA8cda0adc2C78776488cC77279184E83
+TOKOS_LENDING=0xBACBf125969023F26415A8b914d05f421B423009
 
-# Protocol Contracts
-TOKOS_LENDING=0x...
-AUTONOMOUS_LIQUIDITY_MANAGER=0x...
+# Mock Tokens (Faucets)
+WETH_ADDRESS=0x578b2807ea81C429505F1be4743Aec422758A461
+USDC_ADDRESS=0xEf2F49a4fC829B3cB1d80b0f9FDc0fb0D149e7B0
+
+# Supporting Contracts
+KANDEL_SEEDER=0xED05f0EF1BA48585C45B2DD52c0DbD57d66Ea981
+VAULT_FACTORY=0xC231246DB86C897B1A8DaB35bA2A834F4bC6191c
 ```
 
 ## 🎯 Usage Examples
 
-### 1. Claim Test Tokens
+### 1. Claim Test Tokens from Faucets
 
 ```bash
-# Get 10 mWETH
-cast send $WETH_ADDRESS "faucet()" --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
+# Claim 10 WETH (once per hour)
+cast send $WETH_ADDRESS "faucet()" \
+  --rpc-url $SOMNIA_RPC_URL \
+  --private-key $PRIVATE_KEY
 
-# Get 10,000 mUSDC
-cast send $USDC_ADDRESS "faucet()" --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
+# Claim 10,000 USDC (once per hour)  
+cast send $USDC_ADDRESS "faucet()" \
+  --rpc-url $SOMNIA_RPC_URL \
+  --private-key $PRIVATE_KEY
+
+# Check if you can claim (returns canClaim, remainingTime)
+cast call $WETH_ADDRESS "canClaimFaucet(address)" $YOUR_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL
 ```
 
-### 2. Fund the Autonomous Liquidity Manager
+### 2. Check Token Balances
 
 ```bash
-# Transfer 10 WETH to ALM
-cast send $WETH_ADDRESS "transfer(address,uint256)" $ALM_ADDRESS 10000000000000000000 \
-  --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
+# Check your WETH balance
+cast call $WETH_ADDRESS "balanceOf(address)" $YOUR_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL
 
-# Transfer 10,000 USDC to ALM  
-cast send $USDC_ADDRESS "transfer(address,uint256)" $ALM_ADDRESS 10000000000 \
-  --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
+# Check your USDC balance  
+cast call $USDC_ADDRESS "balanceOf(address)" $YOUR_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL
+
+# Check faucet amounts
+cast call $WETH_ADDRESS "FAUCET_AMOUNT()" --rpc-url $SOMNIA_RPC_URL
+cast call $USDC_ADDRESS "FAUCET_AMOUNT()" --rpc-url $SOMNIA_RPC_URL
 ```
 
-### 3. Check Contract Balances
+### 3. Tokos Lending Operations
 
 ```bash
-# Check ALM balances
-cast call $ALM_ADDRESS "getContractBalances()" --rpc-url $SOMNIA_RPC_URL
-
-# Check position summary
-cast call $ALM_ADDRESS "getPositionSummary()" --rpc-url $SOMNIA_RPC_URL
-```
-
-### 4. Strategy Operations
-
-```bash
-# Provision to Tokos lending (1 WETH, 1000 USDC)
-cast send $ALM_ADDRESS "provisionToTokos(uint256,uint256)" 1000000000000000000 1000000000 \
+# Supply 1 WETH to lending pool
+cast send $WETH_ADDRESS "approve(address,uint256)" $TOKOS_ADDRESS 1000000000000000000 \
   --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
 
-# Emergency withdraw (get all funds back)
-cast send $ALM_ADDRESS "emergencyWithdraw()" \
+cast send $TOKOS_ADDRESS "supply(address,uint256)" $WETH_ADDRESS 1000000000000000000 \
   --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
+
+# Check lending APY
+cast call $TOKOS_ADDRESS "getLendingAPY(address)" $WETH_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL
+
+# Check your supplied amount
+cast call $TOKOS_ADDRESS "getSuppliedAmount(address,address)" $YOUR_ADDRESS $WETH_ADDRESS \
+  --rpc-url $SOMNIA_RPC_URL
 ```
 
-### 5. Check Tokos APY
+### 4. Agent Manager Operations
 
 ```bash
-# Get WETH lending APY
-cast call $TOKOS_ADDRESS "getLendingAPY(address)" $WETH_ADDRESS --rpc-url $SOMNIA_RPC_URL
+# Check agent status
+cast call $AGENT_MANAGER "getPositionSummary()" \
+  --rpc-url $SOMNIA_RPC_URL
 
-# Get USDC lending APY  
-cast call $TOKOS_ADDRESS "getLendingAPY(address)" $USDC_ADDRESS --rpc-url $SOMNIA_RPC_URL
+# Supply funds to Tokos via Agent Manager (owner only)
+cast send $AGENT_MANAGER "provisionToTokos(uint256,uint256)" 1000000000000000000 1000000000 \
+  --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
+
+# Emergency withdraw all funds (owner only)
+cast send $AGENT_MANAGER "emergencyWithdraw()" \
+  --rpc-url $SOMNIA_RPC_URL --private-key $PRIVATE_KEY
 ```
 
 ## 🧪 Testing
@@ -182,180 +217,317 @@ forge test -vvv
 # Run specific test file
 forge test --match-contract MockWETHTest
 
+# Run specific test function
+forge test --match-test testFaucetCooldown
+
 # Generate gas report
 forge test --gas-report
+
+# Generate coverage report
+forge coverage
 ```
+
+### Test Coverage
+
+- ✅ **MockWETH**: Faucet functionality, cooldown, transfers
+- ✅ **MockUSDC**: Faucet functionality, decimals, minting
+- ✅ **TokosLending**: Supply, withdraw, APY calculations
+- ✅ **AgentManager**: Strategy execution, emergency procedures
 
 ## 📁 Project Structure
 
 ```
 contracts/
 ├── src/
-│   ├── AutonomousLiquidityManager.sol       # Main ALM contract
+│   ├── AgentManager.sol                    # Main autonomous liquidity manager
 │   ├── interfaces/
-│   │   ├── IKandelSeeder.sol                # Elix Kandel seeder interface
-│   │   ├── IKandel.sol                      # Kandel instance interface
-│   │   ├── IVaultFactory.sol                # Elix vault factory interface
-│   │   ├── IVault.sol                       # Elix vault interface
-│   │   └── ITokosLending.sol                # Tokos lending interface
+│   │   ├── IKandelSeeder.sol              # Elix Kandel seeder interface
+│   │   ├── IKandel.sol                    # Kandel instance interface  
+│   │   ├── IVaultFactory.sol              # Elix vault factory interface
+│   │   ├── IVault.sol                     # Elix vault interface
+│   │   └── ITokosLending.sol              # Tokos lending interface
 │   ├── libraries/
-│   │   └── SomniaAddresses.sol              # Protocol address registry
+│   │   ├── SomniaAddresses.sol            # Production address registry
+│   │   └── MockSomniaAddresses.sol        # Testnet address registry
 │   ├── mocks/
-│   │   ├── MockWETH.sol                     # Test WETH with faucet
-│   │   └── MockUSDC.sol                     # Test USDC with faucet
+│   │   ├── MockWETH.sol                   # Testnet WETH with faucet
+│   │   ├── MockUSDC.sol                   # Testnet USDC with faucet
+│   │   ├── MockKandelSeeder.sol           # Mock Elix seeder
+│   │   └── MockVaultFactory.sol           # Mock vault factory
 │   └── tokos/
-│       └── TokosLending.sol                 # Lending protocol implementation
+│       └── TokosLending.sol               # Lending protocol implementation
 ├── test/
-│   ├── AutonomousLiquidityManager.t.sol     # ALM tests
-│   ├── TokosLending.t.sol                   # Tokos tests
-│   ├── MockWETH.t.sol                       # WETH tests
-│   └── MockUSDC.t.sol                       # USDC tests
-├── deploy-tokens.sh                         # Deploy mock tokens
-├── deploy-tokos.sh                          # Deploy Tokos lending
-└── deploy-alm.sh                            # Deploy ALM
+│   ├── AgentManager.t.sol                 # Agent manager tests
+│   ├── TokosLending.t.sol                 # Tokos lending tests
+│   ├── MockWETH.t.sol                     # WETH faucet tests
+│   ├── MockUSDC.t.sol                     # USDC faucet tests
+│   └── MockElix.t.sol                     # Elix integration tests
+├── scripts/
+│   ├── deploy_fixed.sh                    # Deploy all contracts
+│   ├── deploy-agent.sh                    # Deploy agent manager only
+│   ├── claim-faucet.sh                    # Claim from faucets
+│   └── check-balance.sh                   # Check token balances
+├── deployments/
+│   ├── addresses.txt                      # All deployed addresses
+│   ├── manager_address.txt                # Agent manager address
+│   ├── tokos_address.txt                  # Tokos lending address
+│   ├── weth_address.txt                   # WETH token address
+│   └── usdc_address.txt                   # USDC token address
+├── foundry.toml                           # Foundry configuration
+└── README.md                              # This file
 ```
 
 ## 🔐 Security Features
 
-- ✅ **Ownable**: Only backend agent wallet can execute strategies
-- ✅ **SafeERC20**: Protected token transfers
+### Contract Security
+- ✅ **Ownable**: Only authorized wallets can execute strategies
+- ✅ **SafeERC20**: Protected token transfers with proper error handling
 - ✅ **Balance Checks**: Validates sufficient funds before operations
 - ✅ **Emergency Withdraw**: Panic button for risk management
 - ✅ **Atomic Operations**: No partial state changes
 - ✅ **Custom Errors**: Gas-efficient error handling
 - ✅ **ReentrancyGuard**: Protection against reentrancy attacks
 
+### Faucet Security
+- ✅ **Cooldown Period**: 1 hour between claims per address
+- ✅ **Fixed Amounts**: Prevents excessive token inflation
+- ✅ **Rate Limiting**: Built-in spam protection
+- ✅ **Balance Tracking**: Accurate accounting of claimed amounts
+
+### Access Control
+- ✅ **Role-based permissions**: Owner-only functions for critical operations
+- ✅ **Multi-signature ready**: Compatible with multisig wallets
+- ✅ **Upgradeable patterns**: Future-proof contract architecture
+
 ## 🌟 Core Features
 
-### Autonomous Liquidity Manager
+### AgentManager (Autonomous Liquidity Manager)
 
-- **provisionToElix()** - Deploy funds to Kandel market-making
-- **provisionToTokos()** - Move funds to lending for yield
-- **emergencyWithdraw()** - Panic button to retrieve all funds
-- **getPositionSummary()** - Complete portfolio overview
+#### Strategy Functions
+- **provisionToTokos()** - Move funds to lending for yield generation
+- **provisionToElix()** - Deploy funds to Kandel market-making (if integrated)
+- **emergencyWithdraw()** - Panic button to retrieve all funds immediately
+- **getPositionSummary()** - Complete portfolio overview and metrics
 
-### Tokos Lending Protocol
+#### Management Functions  
+- **setTokosLending()** - Update Tokos contract address (owner only)
+- **rescueTokens()** - Recover accidentally sent tokens (owner only)
+- **updateOwner()** - Transfer ownership to new address
 
-- **Dynamic APY** - Interest rates adjust based on utilization
-- **Multi-token support** - WETH and USDC pools
-- **Share-based accounting** - Fair distribution of rewards
-- **Real-time interest accrual** - Compound interest calculation
+### TokosLending Protocol
 
-### Mock Tokens (Testnet)
+#### Core Lending Features
+- **supply()** - Deposit tokens to earn yield
+- **withdraw()** - Remove tokens from lending pool
+- **borrow()** - Borrow against collateral (if implemented)
+- **repay()** - Pay back borrowed amounts
 
-- **Faucet functionality** - Get test tokens every hour
-- **ERC20 compliant** - Full standard implementation
-- **Realistic decimals** - 18 for WETH, 6 for USDC
+#### Analytics Functions
+- **getLendingAPY()** - Current annual percentage yield
+- **getTotalValueLocked()** - Total funds in protocol
+- **getSuppliedAmount()** - User's supplied balance
+- **getUtilizationRate()** - Pool utilization metrics
 
-## 🔗 Somnia Testnet Info
+### Mock Tokens (Testnet Only)
 
-- **Chain ID:** 50312 (0xc488)
-- **RPC URL:** https://dream-rpc.somnia.network
-- **Currency:** STT
-- **Block Explorer:** [Somnia Explorer](https://explorer.somnia.network)
-- **Faucet:** [Get STT tokens](https://faucet.somnia.network)
+#### Faucet Functions
+- **faucet()** - Claim tokens (10 WETH or 10,000 USDC)
+- **canClaimFaucet()** - Check eligibility and cooldown
+- **FAUCET_AMOUNT** - View claimable amount
+- **FAUCET_COOLDOWN** - View cooldown period (1 hour)
 
-### Elix (Mangrove) Protocol Addresses
+#### Standard ERC20
+- **transfer()**, **approve()**, **transferFrom()** - Standard token operations
+- **balanceOf()**, **totalSupply()** - Balance queries
+- **decimals()** - Token precision (18 for WETH, 6 for USDC)
 
-| Contract | Address |
-|----------|---------|
-| Mangrove (MGV) | `0x13d30dF7e872660fDd5293BEe39EBd7a61C4C622` |
-| MGV Reader | `0xe3dbF8bAB1c5D4B3386Fc05e207Bd8f91552ACc0` |
-| Vault Factory | `0xD7c89B9AC4f09131a962BB9527CcF26cB68cF70c` |
-| Kandel Seeder | `0x5Abc9F2f694269eb24FD27321A00445cc0E7B4c4` |
+## 🔗 Somnia Testnet Information
 
-## 🤖 AI Agent Integration
+### Network Details
+- **Chain ID**: 50312 (0xc488)
+- **RPC URL**: https://testnet.somnia.network  
+- **Currency**: STT (Somnia Test Token)
+- **Block Explorer**: https://explorer.somnia.network
+- **Faucet**: https://faucet.somnia.network
 
-The system is designed to work with an AI backend that:
+### Adding to Wallet
 
-1. **Monitors** market conditions (spreads, volatility, APYs)
-2. **Decides** optimal strategy allocation
-3. **Executes** via AutonomousLiquidityManager functions
-4. **Tracks** performance and risk metrics
-
-### Example Backend Flow
-
-```javascript
-// Check current position
-const position = await alm.getPositionSummary();
-
-// Compare opportunities
-const elixSpread = await calculateElixOpportunity();
-const tokosAPY = await alm.getTokosAPY(WETH);
-
-// Make decision
-if (elixSpread > tokosAPY && !position.inElix) {
-  await alm.provisionToElix(wethAmount, usdcAmount, kandelParams);
-} else if (tokosAPY > elixSpread && !position.inTokos) {
-  await alm.provisionToTokos(wethAmount, usdcAmount);
+```json
+{
+  "chainId": "0xc488",
+  "chainName": "Somnia Testnet",
+  "nativeCurrency": {
+    "name": "STT",
+    "symbol": "STT", 
+    "decimals": 18
+  },
+  "rpcUrls": ["https://testnet.somnia.network"],
+  "blockExplorerUrls": ["https://explorer.somnia.network"]
 }
 ```
 
+## 🤖 AI Agent Integration
+
+### Backend Integration Points
+
+The contracts are designed to work seamlessly with the Lenzu Agent Service:
+
+```javascript
+// Agent service calls contract functions
+const agentManager = new Contract(AGENT_MANAGER_ADDRESS, ABI, signer);
+
+// Check current position
+const position = await agentManager.getPositionSummary();
+
+// Execute strategy based on AI decision
+if (shouldSupplyToTokos) {
+  await agentManager.provisionToTokos(wethAmount, usdcAmount);
+}
+
+// Emergency procedures
+if (riskTooHigh) {
+  await agentManager.emergencyWithdraw();
+}
+```
+
+### Multi-User Support
+
+The Agent Service can manage multiple users by:
+1. Each user deploys their own AgentManager instance
+2. Agent service maintains mapping of user → contract address
+3. AI makes personalized decisions per user's portfolio
+
 ## 📊 Monitoring & Analytics
 
-### Key Metrics to Track
-
-- **Total Value Locked (TVL)** in each strategy
-- **APY Performance** vs benchmarks
-- **Risk Metrics** (drawdown, volatility)
-- **Gas Efficiency** of strategy switches
-- **Slippage** in Elix operations
-
-### Dashboard Integration
+### On-chain Metrics
 
 ```bash
-# Get all relevant data
-cast call $ALM_ADDRESS "getPositionSummary()" --rpc-url $SOMNIA_RPC_URL
-cast call $TOKOS_ADDRESS "getTotalValueLocked()" --rpc-url $SOMNIA_RPC_URL
+# Portfolio value
+cast call $AGENT_MANAGER "getPositionSummary()" --rpc-url $SOMNIA_RPC_URL
+
+# Tokos performance  
 cast call $TOKOS_ADDRESS "getLendingAPY(address)" $WETH_ADDRESS --rpc-url $SOMNIA_RPC_URL
+cast call $TOKOS_ADDRESS "getTotalValueLocked()" --rpc-url $SOMNIA_RPC_URL
+
+# Token metrics
+cast call $WETH_ADDRESS "totalSupply()" --rpc-url $SOMNIA_RPC_URL
+cast call $USDC_ADDRESS "totalSupply()" --rpc-url $SOMNIA_RPC_URL
 ```
 
-## 🛠️ Development
+### Event Monitoring
 
-### Build
+Key events to monitor for analytics:
 
-```bash
-forge build
+```solidity
+// AgentManager events
+event FundsDeployed(string strategy, uint256 wethAmount, uint256 usdcAmount);
+event EmergencyWithdraw(uint256 wethAmount, uint256 usdcAmount);
+
+// Tokos events  
+event Supply(address indexed user, address indexed token, uint256 amount);
+event Withdraw(address indexed user, address indexed token, uint256 amount);
+
+// Faucet events
+event FaucetClaimed(address indexed user, uint256 amount);
 ```
 
-### Format
+## 🛠️ Development Commands
+
+### Building & Testing
 
 ```bash
+# Clean build
+forge clean && forge build
+
+# Format code
 forge fmt
-```
 
-### Coverage
+# Run linter
+forge test --check
 
-```bash
-forge coverage
-```
-
-### Gas Optimization
-
-```bash
+# Gas optimization report
 forge test --gas-report
+
+# Generate documentation
+forge doc --build
 ```
 
-## 📝 License
+### Deployment Helpers
 
-MIT License - Built for Somnia Hackathon 2025
+```bash
+# Check deployment status
+./scripts/check-balance.sh
+
+# Claim tokens for testing
+./scripts/claim-faucet.sh
+
+# Verify contracts on explorer
+forge verify-contract $CONTRACT_ADDRESS ContractName \
+  --chain-id 50312 \
+  --constructor-args $(cast abi-encode "constructor(address)" $OWNER_ADDRESS)
+```
 
 ## 🆘 Troubleshooting
 
 ### Common Issues
 
-1. **Transaction Failures**: Ensure sufficient STT balance for gas
-2. **Contract Not Found**: Verify correct addresses in .env
-3. **Faucet Cooldown**: Wait 1 hour between faucet claims
-4. **Insufficient Balance**: Check token balances before operations
+**"Transaction failed: insufficient funds"**
+- Get STT from [Somnia faucet](https://faucet.somnia.network) for gas
+- Check your STT balance: `cast balance $YOUR_ADDRESS --rpc-url $SOMNIA_RPC_URL`
 
-### Support
+**"Faucet cooldown active"**  
+- Wait 1 hour between faucet claims
+- Check remaining time: `cast call $TOKEN_ADDRESS "canClaimFaucet(address)" $YOUR_ADDRESS`
 
-- Check the contract addresses are correct in .env
-- Verify you have STT tokens for gas
-- Ensure private key has sufficient permissions
-- Check Somnia testnet status
+**"Contract not found"**
+- Verify contract addresses in `deployments/addresses.txt`
+- Ensure you're using the correct RPC URL for Somnia testnet
 
----
+**"Function not found in ABI"**
+- Rebuild contracts: `forge build`
+- Check contract is deployed: `cast code $CONTRACT_ADDRESS --rpc-url $SOMNIA_RPC_URL`
 
-**Built for Somnia Hackathon 2025** 🚀
+### Development Issues
+
+**"Compilation failed"**
+- Run `forge install` to ensure dependencies are installed
+- Check Solidity version compatibility in `foundry.toml`
+
+**"Tests failing"**
+- Ensure you have test tokens: run `./scripts/claim-faucet.sh`
+- Check test setup in `test/` directory
+
+### Gas Issues
+
+**"Transaction underpriced"**
+- Somnia testnet uses dynamic gas pricing
+- Try increasing gas limit: `--gas-limit 500000`
+
+**"Gas estimation failed"**  
+- Check contract state allows the operation
+- Verify token approvals are set correctly
+
+## 📚 Additional Resources
+
+### Documentation
+- **Foundry Book**: https://book.getfoundry.sh/
+- **OpenZeppelin Contracts**: https://docs.openzeppelin.com/contracts/
+- **Somnia Documentation**: https://docs.somnia.network/
+
+### Somnia Ecosystem
+- **Discord**: https://discord.gg/somnia
+- **GitHub**: https://github.com/Somnia-Network
+- **Block Explorer**: https://explorer.somnia.network
+
+## 📝 License
+
+MIT License - Built for the Somnia blockchain ecosystem.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Follow Solidity best practices and existing code style
+4. Add comprehensive tests for new functionality
+5. Run the full test suite: `forge test`
+6. Submit a pull request with detailed description
