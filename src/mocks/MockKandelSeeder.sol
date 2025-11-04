@@ -196,13 +196,13 @@ contract MockKandel is IKandel {
      */
     function getAPY() external view returns (uint256 apy) {
         if (!isActive) return 0;
-        
+
         // Mock APY calculation based on spread and market conditions
         // Market making typically yields 2-15% annually
         uint256 baseAPY = 800; // 8% base APY
         uint256 spreadBonus = spread * 2; // Higher spread = higher APY
         uint256 timeBonus = (block.timestamp % 500); // Time-based variation
-        
+
         apy = baseAPY + spreadBonus + timeBonus;
         // Cap between 3% and 20%
         if (apy < 300) apy = 300;

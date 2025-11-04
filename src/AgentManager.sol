@@ -230,7 +230,7 @@ contract AgentManager is Ownable {
             } catch {
                 // If balanceOf call fails, skip WETH withdrawal
             }
-            
+
             try ITokosLending(tokosLending).balanceOf(address(this), USDC) returns (uint256 usdcBalance) {
                 if (usdcBalance > 0) {
                     try ITokosLending(tokosLending).withdraw(USDC, 0) {
